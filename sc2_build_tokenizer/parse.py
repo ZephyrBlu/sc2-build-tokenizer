@@ -1,26 +1,14 @@
 import traceback
 from pathlib import PurePath
-from dataclasses import dataclass
 from collections import defaultdict
 from zephyrus_sc2_parser import parse_replay
 
+from sc2_build_tokenizer.dataclasses import ParsedBuild
 from sc2_build_tokenizer.constants import IGNORE_OBJECTS
 
 # 22.4 gameloops per second
 SEVEN_MINUTES = 9408
 ERRORS = defaultdict(int)
-
-
-@dataclass
-class ParsedBuild:
-    race: str
-    build: list
-
-    def to_json(self):
-        return {
-            'race': self.race,
-            'build': self.build,
-        }
 
 
 def _recurse(dir_path, fn=None):

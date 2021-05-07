@@ -2,7 +2,12 @@ from sc2_build_tokenizer.parse import parse_builds
 from sc2_build_tokenizer.tokenize import (
     generate_build_tokens,
     generate_token_distributions,
-    generate_paths,
+    generate_token_paths,
+)
+from sc2_build_tokenizer.dataclasses import (
+    ParsedBuild,
+    TokenizedBuild,
+    TokenizedDistributions,
 )
 
 
@@ -18,7 +23,7 @@ def tokenize(replay):
         for player_build in build:
             player_race = build.race
             opp_race = races[0] if races[1] == player_race else races[1]
-            paths = generate_paths(player_build, player_race, opp_race)
+            paths = generate_token_paths(player_build, player_race, opp_race)
 
             # only take the most likely path
             tokenized.append(paths[0])
