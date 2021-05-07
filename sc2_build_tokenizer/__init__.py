@@ -1,4 +1,7 @@
-from sc2_build_tokenizer.parse import parse_builds
+import logging
+from logging import NullHandler
+
+from sc2_build_tokenizer.parse import extract_builds
 from sc2_build_tokenizer.tokenize import (
     generate_build_tokens,
     generate_token_distributions,
@@ -10,22 +13,37 @@ from sc2_build_tokenizer.dataclasses import (
     TokenizedDistributions,
 )
 
+logger = logging.getLogger(__name__).addHandler(NullHandler())
+
 
 def tokenize(replay):
-    builds = parse_builds(replay)
+    logger.info('Tokenizing builds with default distributions')
 
-    for build in builds:
+    logger.info('Extracting builds from replays')
+    games = extract_builds(replay)
+
+    logger.info('Iterating through replays')
+
+    tokenized = []
+    for game in games:
         races = []
-        for player_build in build:
+        for build in game:
             races.append(build.race)
 
-        tokenized = []
-        for player_build in build:
+        logger.info('Generating token paths for builds from current replay')
+
+        builds = []
+        for build in game:
             player_race = build.race
             opp_race = races[0] if races[1] == player_race else races[1]
-            paths = generate_token_paths(player_build, player_race, opp_race)
+            paths = generate_token_paths(build.build, player_race, opp_race)
 
             # only take the most likely path
-            tokenized.append(paths[0])
+            builds.append(paths[0])
+
+        tokenized.append(builds)
+        logger.info('Completed generating tokenized builds from current replay')
+
+    logger.info('Completed generating all tokenized builds from replays')
 
     return tokenized

@@ -1,13 +1,13 @@
 from pathlib import Path
 from collections import defaultdict
-from dataclasses import dataclass
 
 from sc2_build_tokenizer import (
-    parse_builds,
+    extract_builds,
     generate_build_tokens,
     generate_token_distributions,
     generate_token_paths,
 )
+from sc2_build_tokenizer.dataclasses import ParsedBuild
 from sc2_build_tokenizer.data import PARSED_BUILDS
 
 TEST_REPLAY_PATH = Path('IEM/1 - Playoffs/Finals/Reynor vs Zest/20210228 - GAME 1 - Reynor vs Zest - Z vs P - Oxide LE.SC2Replay')
@@ -16,18 +16,6 @@ REPLAY_PATH = Path('IEM')
 BUILD_TOKENS = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 TOKEN_PROBABILITY = defaultdict(lambda: defaultdict(dict))
 TOKEN_INFORMATION = defaultdict(lambda: defaultdict(dict))
-
-
-@dataclass
-class ParsedBuild:
-    race: str
-    build: list
-
-    def to_json(self):
-        return {
-            'race': self.race,
-            'build': self.build,
-        }
 
 
 def to_dict(struct):
@@ -44,7 +32,7 @@ def manual_tokenize(
     _write_tokenized=True,
 ):
     if _write_builds:
-        parsed_builds = parse_builds(REPLAY_PATH)
+        parsed_builds = extract_builds(REPLAY_PATH)
         serialized_builds = list(map(
             lambda game: list([build.to_json() for build in game]),
             parsed_builds,
@@ -119,7 +107,7 @@ def manual_tokenize(
     # tokenized test replay
     # ----------------------
 
-    test_builds = parse_builds(TEST_REPLAY_PATH)[0]
+    test_builds = extract_builds(TEST_REPLAY_PATH)[0]
     races = []
     for build in test_builds:
         races.append(build.race)
@@ -128,7 +116,7 @@ def manual_tokenize(
 
     for build in test_builds:
         opp_race = races[0] if build.race == races[1] else races[1]
-        paths = generate_paths(
+        paths = generate_token_paths(
             build.build,
             build.race,
             opp_race,

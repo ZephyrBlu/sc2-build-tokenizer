@@ -1,5 +1,6 @@
 import copy
 import math
+import logging
 from collections import defaultdict
 
 from sc2_build_tokenizer.dataclasses import (
@@ -9,25 +10,40 @@ from sc2_build_tokenizer.dataclasses import (
 from sc2_build_tokenizer.data import TOKEN_INFORMATION
 from sc2_build_tokenizer.data import TOKEN_PROBABILITY
 
+logger = logging.getLogger(__name__)
+
 
 def generate_build_tokens(build, source=None):
+    logger.info('Generating tokens from parsed build')
+
     build_tokens = source
     if not source:
+        logger.info('No source supplied, recording token counts locally')
         build_tokens = defaultdict(int)
 
+    logger.info('Iterating through build')
     for i in range(0, len(build)):
+        logger.debug(f'Generating tokens for {build[i]} (Index: {i})')
         for index in range(1, 9):
-            token = build[i:i + index]
-            build_tokens[tuple(token)] += 1
+            token = tuple(build[i:i + index])
+            logger.debug(f'Found token: {token}')
+
+            build_tokens[token] += 1
+            logger.debug(f'Incrementing token count to {build_tokens[token]}')
 
             # exit if we're at the end of the build
             if i + index >= len(build):
+                logger.debug('Reached end of build')
                 break
+
+    logger.info('Completed generating build tokens')
 
     return build_tokens
 
 
 def generate_token_distributions(source):
+    logging.info('Generating token distributions from token counts')
+
     distributions = TokenDistributions({}, {})
     tokenized = list(source.items())
     unigrams = {}
@@ -35,38 +51,61 @@ def generate_token_distributions(source):
 
     # unigrams are a special case because they have no corresponding
     # predicted token. It's easier to store them separately
-    for tokens, count in tokenized:
-        if len(tokens) == 1:
-            unigrams[tokens] = count
+    logger.info('Iterating through generated tokens')
+    for token, count in tokenized:
+        if len(token) == 1:
+            unigrams[token] = count
+            logger.debug(f'Setting unigram token {token} to {count}')
             continue
 
-        ngram = tokens[:-1]
-        predicted = tokens[-1]
+        ngram = token[:-1]
+        predicted = token[-1]
 
         ngram_tokens[ngram][predicted] = count
+        logger.debug(f'Setting ngram token {token} to {count}')
+
+    logger.info('Calculating probabilities and information content for unigram tokens')
 
     total = sum(unigrams.values())
-    tokens = list(unigrams.items())
-    for token, count in tokens:
+    unigram_tokens = list(unigrams.items())
+    for token, count in unigram_tokens:
         distributions.probability[token] = count / total
         distributions.information[token] = -math.log2(count / total)
-        print(count, distributions.probability[token], token)
+        logger.debug(
+            count,
+            distributions.probability[token],
+            distributions.information[token],
+            token,
+        )
 
-    for tokens, outcomes in ngram_tokens.items():
+    logger.info('Calculating probabilities and information content for ngram tokens')
+
+    for token, outcomes in ngram_tokens.items():
+        logger.debug(f'Calculating for ngram token: {token}')
+
         total = sum(outcomes.values())
 
         # 10 is an arbitrary minimum number of samples
         # to reduce overfitting paths based on a few samples
         if total < 10:
+            logger.debug(f'Insufficient occurences of token {token}: {total}')
             continue
 
         predicted = list(outcomes.items())
-        print(tokens)
-        for token, count in predicted:
-            distributions.probability[(*tokens, token)] = count / total
-            distributions.information[(*tokens, token)] = -math.log2(count / total)
-            print(count, distributions.probability[(*tokens, token)], token)
-        print('\n')
+        for predicted_token, count in predicted:
+            logger.debug(f'{count} occurences of {predicted_token}')
+            logger.debug(f'Calculating probability of {predicted_token} given token')
+
+            distributions.probability[(*token, predicted_token)] = count / total
+            distributions.information[(*token, predicted_token)] = -math.log2(count / total)
+
+            logger.debug(
+                f'Distributions for token {(*token, predicted_token)} ({count})',
+                distributions.probability[(*token, predicted_token)],
+                distributions.information[(*token, predicted_token)],
+            )
+
+    logger.info('Completed generating token distributions')
 
     return distributions
 
@@ -84,10 +123,18 @@ def _generate_next_tokens(
     token_probability,
     token_information,
 ):
-    build_length = len(build)
+    logger.info('Generating next set of tokens')
+    logger.debug(f'Current token path: {build_tokens}')
+    logger.debug(f'Current build index: {build_index}')
+    logger.debug(f'Current probability: {probability}')
+    logger.debug(f'Current information: {information}')
+    logger.debug('Iterating through possible token sizes')
+
     all_paths = []
     # generate new path information for each possible new token
     for i in range(1, max_token_size + 1):
+        logger.debug(f'Generating new token of length {i}')
+
         # don't need copies for values, but it keeps things explicit
         updated_tokens = copy.deepcopy(build_tokens)
         updated_probability = copy.deepcopy(probability)
@@ -97,36 +144,49 @@ def _generate_next_tokens(
 
         token = tuple(build[build_index:build_index + i])
 
+        logger.info(f'Generated new token: {token}')
+
         # if we don't have a record of the preceding sequence,
         # it was too unlikely to record so we bail
         if token not in token_probability:
+            logger.debug(f"Couldn't find token in conditional probability distribution")
             continue
 
-        token_prob = 1
-        # print(token, len(token))
+        logger.info('Calculating probability of building sequence in token')
+        logger.debug('Iterating through buildings in token')
+
+        fragment_prob = 1
         for index in range(0, len(token)):
+            logger.debug(f'At index {index} in token sequence')
+
             token_fragment = token[:index + 1]
-            token_prob *= token_probability[token_fragment]
+            logger.debug(f'Current token fragment: {token_fragment}')
+
+            fragment_prob *= token_probability[token_fragment]
+            logger.debug(f'Current token fragment probability: {fragment_prob}')
+
             updated_probability_values.append(
                 token_probability[token_fragment]
             )
+
             updated_information += token_information[token_fragment]
+            logger.debug(f'Current token fragment information: {updated_information}')
+
             updated_information_values.append(
                 token_information[token_fragment]
             )
-            # print(
-            #     index + 1,
-            #     TOKEN_PROBABILITY[player_race][opp_race][token_fragment],
-            #     token_prob,
-            #     token_fragment,
-            # )
-        # print('\n')
-        updated_probability *= token_prob
+
+        logger.info('Updating token path probability')
+        updated_probability *= fragment_prob
+        logger.debug(f'Current token path probability: {updated_probability}')
+
+        logger.info('Updating token path')
         updated_tokens.append(token)
+        logger.debug(f'Current token path: {updated_tokens}')
 
         # exit if we're at the end of the build
-        if build_index + i >= build_length:
-            # print(new_path, token, build_index, i, build_index + i)
+        if build_index + i >= len(build):
+            logger.info('Reached end of build, recording token path and returning accumulated paths')
             all_paths.append(TokenizedBuild(
                 updated_tokens,
                 updated_probability,
@@ -136,6 +196,7 @@ def _generate_next_tokens(
             ))
             return all_paths
 
+        logger.info('Recurse to next set of tokens')
         calculated_paths = _generate_next_tokens(
             build,
             build_index=build_index + i,
@@ -147,7 +208,12 @@ def _generate_next_tokens(
             token_probability=token_probability,
             token_information=token_information
         )
+
+        logger.info('Accumulating generated token paths')
         all_paths.extend(calculated_paths)
+
+    logger.info('Completed generating token paths')
+
     return all_paths
 
 
@@ -158,20 +224,22 @@ def generate_token_paths(
     token_probability=TOKEN_PROBABILITY,
     token_information=TOKEN_INFORMATION,
 ):
+    logger.info('Recursively generating all possible token paths for build')
+
     if player_race and opp_race:
         if (
             player_race in token_probability
             and opp_race in token_probability[player_race]
         ):
             token_probability = token_probability[player_race][opp_race]
+            logger.debug(f'Setting token probabilty to {player_race} / {opp_race}')
 
         if (
             player_race in token_information
             and opp_race in token_information[player_race]
         ):
             token_information = token_information[player_race][opp_race]
-
-    # print(token_probability, token_information)
+            logger.debug(f'Setting token information to {player_race} / {opp_race}')
 
     paths = _generate_next_tokens(
         build,
@@ -179,6 +247,7 @@ def generate_token_paths(
         token_information=token_information,
     )
 
-    # sort by overall conditional probability of path
+    logger.info('Sorting token paths by overall conditional probability')
     paths.sort(key=lambda path: path.probability, reverse=True)
+
     return paths
