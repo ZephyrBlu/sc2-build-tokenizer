@@ -44,6 +44,29 @@ This is where the idea of viewing and analyzing build orders as sequences of bui
 
 Of course, we can already divide build orders into arbitrary groups of buildings if we want to. But the benefit of a quantitative tokenization process is that tokenized builds (Build orders represented by groups of buildings) can be directly compared and analyzed against other tokenized builds.
 
-## An Overview of Build Tokenization
+## Overview of Build Tokenization Model
 
+### Pre-processing: Build Order Extraction
 
+Build orders are extracted from replays by [`zephyrus-sc2-parser`](https://github.com/ZephyrBlu/zephyrus-sc2-parser) with particular buildings such as supply buildings ignored and only buildings up to the 7 minute mark being counted as part of the build order.
+
+### Pre-processing: Generating N-grams from Build Orders
+
+[N-grams](https://en.wikipedia.org/wiki/N-gram) are an idea from NLP which we use to generate possible tokens from a build order.
+
+### Pre-processing: Generating Token Distributions from N-grams
+
+### Generating Tokenized Build Permutations
+
+Now that we've generated all the possible n-grams based on our extracted build orders, we can use them as a reference to generate possible tokenized builds for a given build order.
+
+### Finding the Optimal Tokenized Build
+
+After we've generated all the possible tokenized builds it's actually very easy to find the optimal build since it's just the build with the highest probability, and all the heavy lifting is done while the build permutations are being searched.
+
+That heavy lifting is all about calculating the conditional probabilities of buildings given previous buildings. Different conditional probabilities (And hence different tokens) will generate different overall probabilities, so our goal is to find the permutation of tokens that optimizes the overall probability of the tokenized build.
+
+Let's think about two extreme permutations:
+
+- The tokenized build consists of all buildings as their own token (Ex: `('A', 'B', 'C')`)
+- The tokenized build consists of a single token containing all buildings (Ex: `(('A', 'B', 'C'))`)
