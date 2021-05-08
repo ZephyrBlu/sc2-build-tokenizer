@@ -69,8 +69,6 @@ def manual_tokenize(
 
     for player_race, other_races in BUILD_TOKENS.items():
         for opp_race, chain in other_races.items():
-            print(f'{player_race} vs {opp_race}')
-
             distributions = generate_token_distributions(chain)
             TOKEN_PROBABILITY[player_race][opp_race] = distributions.probability
             TOKEN_INFORMATION[player_race][opp_race] = distributions.information

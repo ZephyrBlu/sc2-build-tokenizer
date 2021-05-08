@@ -10,9 +10,10 @@ from sc2_build_tokenizer.tokenize import (
 from sc2_build_tokenizer.dataclasses import (
     ParsedBuild,
     TokenizedBuild,
-    TokenizedDistributions,
+    TokenDistributions,
 )
 
+logging.getLogger('zephyrus_sc2_parser').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__).addHandler(NullHandler())
 
 
