@@ -26,7 +26,7 @@ To summarize, he defines three build order blocks: opening, build and compositio
 
 For our purposes we will define build order blocks slightly differently than Max has. Build order blocks are called tokens, and they are simply defined as any sequence of buildings.
 
-Ex: `('Gateway', 'Nexus', 'CyberneticsCore')`
+Ex: `(Gateway, Nexus, CyberneticsCore)`
 
 The term tokens is borrowed from Natural Language Processing (NLP) (See: [Tokenization](https://en.wikipedia.org/wiki/Lexical_analysis#Tokenization)). Buildings are analogous to characters and build order blocks to tokens or words.
 
@@ -50,11 +50,23 @@ Of course, we can already divide build orders into arbitrary groups of buildings
 
 Build orders are extracted from replays by [`zephyrus-sc2-parser`](https://github.com/ZephyrBlu/zephyrus-sc2-parser) with particular buildings such as supply buildings ignored and only buildings up to the 7 minute mark being counted as part of the build order.
 
-### Pre-processing: Generating N-grams from Build Orders
+### Pre-processing: Generating N-grams and Token Distributions from Build Orders
 
-[N-grams](https://en.wikipedia.org/wiki/N-gram) are an idea from NLP which we use to generate possible tokens from a build order.
+[N-grams](https://en.wikipedia.org/wiki/N-gram) are an idea from NLP which we use to generate possible tokens from a build order. In NLP, they're sequences of words in the [corpus](https://en.wikipedia.org/wiki/Text_corpus).
 
-### Pre-processing: Generating Token Distributions from N-grams
+A common usage of n-grams is predicting the next word in a sequence. This is done by finding all the word sequences of length n in the corpus (I.e. n-grams of size n), then calculating conditional probability distributions for the last word in the sequence given the preceding words.
+
+Ex: "my favourite colour is blue" = 5-gram -> P("blue"|"my favourite colour is") = x
+
+For example, if we have a build `(A, B, C)` then we can generate the following n-grams:
+
+- Unigrams: `(A)`, `(B)`, `(C)`
+- Bigrams: `(A, B)`, `(B, C)`
+- Trigrams: `(A, B, C)`
+
+These generated n-grams are referred to as tokens.
+
+Similar to textual n-grams, we can calculate conditional probability distributions for the last building in a token given the preceding buildings. 
 
 ### Generating Tokenized Build Permutations
 
@@ -68,5 +80,5 @@ That heavy lifting is all about calculating the conditional probabilities of bui
 
 Let's think about two extreme permutations:
 
-- The tokenized build consists of all buildings as their own token (Ex: `('A', 'B', 'C')`)
-- The tokenized build consists of a single token containing all buildings (Ex: `(('A', 'B', 'C'))`)
+- The tokenized build consists of all buildings as their own token (Ex: `(A, B, C)`)
+- The tokenized build consists of a single token containing all buildings (Ex: `((A, B, C))`)
