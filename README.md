@@ -72,6 +72,27 @@ Similar to textual n-grams, we can calculate conditional probability distributio
 
 Now that we've generated all the possible n-grams based on our extracted build orders, we can use them as a reference to generate possible tokenized builds for a given build order.
 
+Permutations are searched by recursively branching out to all the possible next tokens and repeating this process until the end of the build is reached.
+
+For example, let's say we limit our tokens to a size of 3 buildings. Initially we will start with three branches, one for each possible initial token. Then from each of those initial tokens there will be three more branches, and so on until the end of the build.
+
+```
+Ex: (A, B, C, D, E, F)
+        -> (A)
+            -> (A), (B)
+            -> (A), (B, C)
+            -> (A), (B, C, D)
+        -> (A, B)
+            -> (A, B), (C)
+            -> (A, B), (C, D)
+            -> (A, B), (C, D, E)
+        -> (A, B, C))
+            -> (A, B, C), (D)
+            -> (A, B, C), (D, E)
+            -> (A, B, C), (D, E, F)
+
+```
+
 ### Finding the Optimal Tokenized Build
 
 After we've generated all the possible tokenized builds it's actually very easy to find the optimal build since it's just the build with the highest probability, and all the heavy lifting is done while the build permutations are being searched.
@@ -80,8 +101,8 @@ That heavy lifting is all about calculating the conditional probabilities of bui
 
 Let's think about two opposite permutations:
 
-- The tokenized build consists of all buildings as their own token (Ex: `((A), (B), (C))`)
-- The tokenized build consists of a single token containing all buildings (Ex: `((A, B, C))`)
+- The tokenized build consists of all buildings as their own token (`Ex: ((A), (B), (C))`)
+- The tokenized build consists of a single token containing all buildings (`Ex: ((A, B, C))`)
 
 In the first case, we treat each building as being [independent](https://en.wikipedia.org/wiki/Independence_(probability_theory)) of the previous ones so the overall probability of the sequence is equal to the product of the probabilities of A, B and C idependently occurring.
 
