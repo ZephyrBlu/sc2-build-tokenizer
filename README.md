@@ -10,7 +10,7 @@ What a tokenized build is an why you would want to do this is explained in the m
 
 Build orders are a fundamental part of StarCraft 2. They are the building blocks that the rest of the game is built upon. Yet as a community, we have no way to analyze and compare build orders.
 
-### Build Order Blocks (Tokens)
+### Build Order Blocks
 
 On the most basic level, a build order is literally the order of the buildings you create in the game. However, build orders contain a lot of implicit information.
 
@@ -26,11 +26,11 @@ To summarize, he defines three build order blocks: opening, build and compositio
 
 For our purposes we will define build order blocks slightly differently than Max has. Build order blocks are called tokens, and they are simply defined as any sequence of buildings.
 
-Ex: `(Gateway, Nexus, CyberneticsCore)`
+`Ex: (Gateway, Nexus, CyberneticsCore)`
 
 The term tokens is borrowed from Natural Language Processing (NLP) (See: [Tokenization](https://en.wikipedia.org/wiki/Lexical_analysis#Tokenization)). Buildings are analogous to characters and build order blocks to tokens or words.
 
-### The Benefits of Thinking About Builds in Terms of Tokens
+### The Benefits of Build Order Blocks
 
 Now that we've established what tokens are, let's go over why thinking about builds in terms of groups of buildings is useful.
 
@@ -56,7 +56,7 @@ Build orders are extracted from replays by [`zephyrus-sc2-parser`](https://githu
 
 A common usage of n-grams is predicting the next word in a sequence. This is done by finding all the word sequences of length n in the corpus (I.e. n-grams of size n), then calculating conditional probability distributions for the last word in the sequence given the preceding words.
 
-Ex: "my favourite colour is blue" = 5-gram -> P("blue"|"my favourite colour is") = x
+`Ex: "my favourite colour is blue" = 5-gram -> P("blue"|"my favourite colour is") = x`
 
 For example, if we have a build `(A, B, C)` then we can generate the following n-grams:
 
@@ -64,9 +64,9 @@ For example, if we have a build `(A, B, C)` then we can generate the following n
 - Bigrams: `(A, B)`, `(B, C)`
 - Trigrams: `(A, B, C)`
 
-These generated n-grams are referred to as tokens.
+We will refer to these generated n-grams as tokens.
 
-Similar to textual n-grams, we can calculate conditional probability distributions for the last building in a token given the preceding buildings. 
+Similar to textual n-grams, we can calculate conditional probability distributions for the last building in a token given the preceding buildings based on a corpus of extracted build orders. 
 
 ### Generating Tokenized Build Permutations
 
@@ -76,9 +76,21 @@ Now that we've generated all the possible n-grams based on our extracted build o
 
 After we've generated all the possible tokenized builds it's actually very easy to find the optimal build since it's just the build with the highest probability, and all the heavy lifting is done while the build permutations are being searched.
 
-That heavy lifting is all about calculating the conditional probabilities of buildings given previous buildings. Different conditional probabilities (And hence different tokens) will generate different overall probabilities, so our goal is to find the permutation of tokens that optimizes the overall probability of the tokenized build.
+That heavy lifting is all about calculating the conditional probabilities of buildings given previous buildings. Different conditional probabilities (And hence different tokens) will generate different overall probabilities, so our goal is to find the permutation of tokens that maximizes the overall probability of the tokenized build.
 
-Let's think about two extreme permutations:
+Let's think about two opposite permutations:
 
-- The tokenized build consists of all buildings as their own token (Ex: `(A, B, C)`)
+- The tokenized build consists of all buildings as their own token (Ex: `((A), (B), (C))`)
 - The tokenized build consists of a single token containing all buildings (Ex: `((A, B, C))`)
+
+In the first case, we treat each building as being [independent](https://en.wikipedia.org/wiki/Independence_(probability_theory)) of the previous ones so the overall probability of the sequence is equal to the product of the probabilities of A, B and C idependently occurring.
+
+`Ex: P((A), (B), (C)) = P(A) * P(B) * P(C)`
+
+In the second case, buildings are dependent on the previous buildings so the overall probability is the product of the *conditional* probabilities of A, B and C rather than the independent ones.
+
+`Ex: P((A, B, C)) = P(A) * P(B|(A)) * P(C|(A, B))`
+
+Because buildings are not independent of one another, these calculations will yield different results.
+
+The optimal tokenized build is the one that maximizes the probability of conditional sequences of buildings like `(A, B, C)`, which incentivizes common sequences of buildings.
