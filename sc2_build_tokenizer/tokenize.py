@@ -133,7 +133,18 @@ def _generate_next_tokens(
     all_paths = []
     # generate new path information for each possible new token
     for i in range(1, max_token_size + 1):
-        logger.debug(f'Generating new token of length {i}')
+        # exit if we're at the end of the build
+        if build_index + i > len(build):
+            logger.info(f'Reached end of build, recording token path: {build_tokens}')
+            all_paths.append(TokenizedBuild(
+                build_tokens,
+                probability,
+                probability_values,
+                information,
+                information_values,
+            ))
+            logger.info(f'Returning accumulated token paths')
+            return all_paths
 
         # don't need copies for values, but it keeps things explicit
         updated_tokens = copy.deepcopy(build_tokens)
@@ -144,12 +155,12 @@ def _generate_next_tokens(
 
         token = tuple(build[build_index:build_index + i])
 
-        logger.info(f'Generated new token: {token}')
+        logger.info(f'Generated new token of length {i} at index {build_index}: {token}')
 
         # if we don't have a record of the preceding sequence,
         # it was too unlikely to record so we bail
         if token not in token_probability:
-            logger.debug(f"Couldn't find token in conditional probability distribution")
+            logger.info(f"Couldn't find token {token} in conditional probability distribution")
             continue
 
         logger.info('Calculating probability of building sequence in token')
@@ -176,25 +187,13 @@ def _generate_next_tokens(
                 token_information[token_fragment]
             )
 
-        logger.info('Updating token path probability')
         updated_probability *= fragment_prob
+        logger.info(f'Updating token path probability')
         logger.debug(f'Current token path probability: {updated_probability}')
 
-        logger.info('Updating token path')
         updated_tokens.append(token)
+        logger.info(f'Updating token path')
         logger.debug(f'Current token path: {updated_tokens}')
-
-        # exit if we're at the end of the build
-        if build_index + i >= len(build):
-            logger.info('Reached end of build, recording token path and returning accumulated paths')
-            all_paths.append(TokenizedBuild(
-                updated_tokens,
-                updated_probability,
-                updated_probability_values,
-                updated_information,
-                updated_information_values,
-            ))
-            return all_paths
 
         logger.info('Recurse to next set of tokens')
         calculated_paths = _generate_next_tokens(
@@ -224,7 +223,7 @@ def generate_token_paths(
     token_probability=TOKEN_PROBABILITY,
     token_information=TOKEN_INFORMATION,
 ):
-    logger.info('Recursively generating all possible token paths for build')
+    logger.info(f'Recursively generating all possible token paths for build: {build}')
 
     if player_race and opp_race:
         if (

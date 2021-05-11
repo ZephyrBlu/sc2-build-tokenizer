@@ -100,8 +100,8 @@ That heavy lifting is all about calculating the conditional probabilities of bui
 
 Let's think about two opposite permutations:
 
-- The tokenized build consists of all buildings as their own token (`Ex: ((A), (B), (C))`)
-- The tokenized build consists of a single token containing all buildings (`Ex: ((A, B, C))`)
+- The tokenized build consists of all buildings as their own token: `(A), (B), (C)`
+- The tokenized build consists of a single token containing all buildings: `(A, B, C)`
 
 In the first case, we treat each building as being [independent](https://en.wikipedia.org/wiki/Independence_(probability_theory)) of the previous ones so the overall probability of the sequence is equal to the product of the probabilities of A, B and C idependently occurring.
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 from collections import defaultdict
 
 from sc2_build_tokenizer import (
@@ -16,6 +17,9 @@ REPLAY_PATH = Path('IEM')
 BUILD_TOKENS = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 TOKEN_PROBABILITY = defaultdict(lambda: defaultdict(dict))
 TOKEN_INFORMATION = defaultdict(lambda: defaultdict(dict))
+
+
+# logging.basicConfig(level=logging.INFO)
 
 
 def to_dict(struct):
@@ -41,10 +45,10 @@ def manual_tokenize(
         with open('sc2_build_tokenizer/data/parsed_builds.py', 'w') as builds:
             builds.write(f'PARSED_BUILDS = {serialized_builds}')
     else:
-        parsed_builds = map(
+        parsed_builds = list(map(
             lambda game: list([ParsedBuild(build['race'], build['build']) for build in game]),
             PARSED_BUILDS,
-        )
+        ))
 
     # ----------------------
     # generate build tokens
@@ -85,7 +89,8 @@ def manual_tokenize(
     # ---------------------
 
     tokenized_builds = []
-    for game in parsed_builds:
+    print(f'{len(parsed_builds)} Games')
+    for count, game in enumerate(parsed_builds):
         for build in game:
             paths = generate_token_paths(
                 build.build,
@@ -96,6 +101,7 @@ def manual_tokenize(
             )
             optimal_path = paths[0]
             tokenized_builds.append(optimal_path)
+        print(f'Completed game {count + 1}')
 
     if _write_tokenized:
         with open('sc2_build_tokenizer/data/tokenized_builds.py', 'w') as tokenized:
@@ -105,22 +111,22 @@ def manual_tokenize(
     # tokenized test replay
     # ----------------------
 
-    test_builds = extract_builds(TEST_REPLAY_PATH)[0]
-    races = []
-    for build in test_builds:
-        races.append(build.race)
+    # test_builds = extract_builds(TEST_REPLAY_PATH)[0]
+    # races = []
+    # for build in test_builds:
+    #     races.append(build.race)
 
-    print('Test Builds', test_builds, '\n')
+    # print('Test Builds', test_builds, '\n')
 
-    for build in test_builds:
-        opp_race = races[0] if build.race == races[1] else races[1]
-        paths = generate_token_paths(
-            build.build,
-            build.race,
-            opp_race,
-            TOKEN_PROBABILITY,
-            TOKEN_INFORMATION,
-        )
+    # for build in test_builds:
+    #     opp_race = races[0] if build.race == races[1] else races[1]
+    #     paths = generate_token_paths(
+    #         build.build,
+    #         build.race,
+    #         opp_race,
+    #         TOKEN_PROBABILITY,
+    #         TOKEN_INFORMATION,
+    #     )
 
         # for tokenized_build in paths:
         #     print(
