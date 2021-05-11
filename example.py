@@ -18,8 +18,7 @@ BUILD_TOKENS = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 TOKEN_PROBABILITY = defaultdict(lambda: defaultdict(dict))
 TOKEN_INFORMATION = defaultdict(lambda: defaultdict(dict))
 
-
-# logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.CRITICAL)
 
 
 def to_dict(struct):
@@ -91,6 +90,7 @@ def manual_tokenize(
     tokenized_builds = []
     print(f'{len(parsed_builds)} Games')
     for count, game in enumerate(parsed_builds):
+        game_builds = []
         for build in game:
             paths = generate_token_paths(
                 build.build,
@@ -100,12 +100,17 @@ def manual_tokenize(
                 TOKEN_INFORMATION,
             )
             optimal_path = paths[0]
-            tokenized_builds.append(optimal_path)
+            game_builds.append(optimal_path)
+        tokenized_builds.append(game_builds)
         print(f'Completed game {count + 1}')
 
     if _write_tokenized:
+        serialized_tokenized_builds = list(map(
+            lambda game: list([tokenized_build.to_json() for tokenized_build in game]),
+            tokenized_builds,
+        ))
         with open('sc2_build_tokenizer/data/tokenized_builds.py', 'w') as tokenized:
-            tokenized.write(f'TOKENIZED_BUILDS = {tokenized_builds}')
+            tokenized.write(f'TOKENIZED_BUILDS = {serialized_tokenized_builds}')
 
     # ----------------------
     # tokenized test replay
@@ -140,8 +145,17 @@ def manual_tokenize(
         # print(build, '\n\n')
 
 
+# import cProfile
+# import re
+# cProfile.run('''
 manual_tokenize(
     _write_builds=False,
     _write_distributions=False,
     _write_tokenized=True,
 )
+# ''', 'restats')
+
+# import pstats
+# from pstats import SortKey
+# p = pstats.Stats('restats')
+# p.strip_dirs().sort_stats(SortKey.CUMULATIVE).print_stats()

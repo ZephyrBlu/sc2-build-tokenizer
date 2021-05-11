@@ -7,8 +7,11 @@ from sc2_build_tokenizer.dataclasses import (
     TokenizedBuild,
     TokenDistributions,
 )
-from sc2_build_tokenizer.data import TOKEN_INFORMATION
 from sc2_build_tokenizer.data import TOKEN_PROBABILITY
+from sc2_build_tokenizer.data import TOKEN_INFORMATION
+
+CACHED_TOKEN_PROBABILITY = {}
+CACHED_TOKEN_INFORMATION = {}
 
 logger = logging.getLogger(__name__)
 
@@ -123,19 +126,11 @@ def _generate_next_tokens(
     token_probability,
     token_information,
 ):
-    logger.info('Generating next set of tokens')
-    logger.debug(f'Current token path: {build_tokens}')
-    logger.debug(f'Current build index: {build_index}')
-    logger.debug(f'Current probability: {probability}')
-    logger.debug(f'Current information: {information}')
-    logger.debug('Iterating through possible token sizes')
-
     all_paths = []
     # generate new path information for each possible new token
     for i in range(1, max_token_size + 1):
         # exit if we're at the end of the build
         if build_index + i > len(build):
-            logger.info(f'Reached end of build, recording token path: {build_tokens}')
             all_paths.append(TokenizedBuild(
                 build_tokens,
                 probability,
@@ -143,15 +138,13 @@ def _generate_next_tokens(
                 information,
                 information_values,
             ))
-            logger.info(f'Returning accumulated token paths')
             return all_paths
 
-        # don't need copies for values, but it keeps things explicit
-        updated_tokens = copy.deepcopy(build_tokens)
-        updated_probability = copy.deepcopy(probability)
-        updated_probability_values = copy.deepcopy(probability_values)
-        updated_information = copy.deepcopy(information)
-        updated_information_values = copy.deepcopy(information_values)
+        updated_tokens = copy.copy(build_tokens)
+        updated_probability = probability
+        updated_probability_values = copy.copy(probability_values)
+        updated_information = information
+        updated_information_values = copy.copy(information_values)
 
         token = tuple(build[build_index:build_index + i])
 
@@ -160,42 +153,46 @@ def _generate_next_tokens(
         # if we don't have a record of the preceding sequence,
         # it was too unlikely to record so we bail
         if token not in token_probability:
-            logger.info(f"Couldn't find token {token} in conditional probability distribution")
             continue
 
-        logger.info('Calculating probability of building sequence in token')
-        logger.debug('Iterating through buildings in token')
+        fragment_probability = 1
+        fragment_information = 0
 
-        fragment_prob = 1
-        for index in range(0, len(token)):
-            logger.debug(f'At index {index} in token sequence')
+        # start from full token and work backwards looking for cache hit
+        for index in range(len(token), 0, -1):
+            logger.info(f'At index {index} in token sequence')
 
-            token_fragment = token[:index + 1]
-            logger.debug(f'Current token fragment: {token_fragment}')
+            token_fragment = token[:index]
+            logger.info(f'Current token fragment: {token_fragment}')
 
-            fragment_prob *= token_probability[token_fragment]
-            logger.debug(f'Current token fragment probability: {fragment_prob}')
+            if (
+                token_fragment in CACHED_TOKEN_PROBABILITY
+                and token_fragment in CACHED_TOKEN_INFORMATION
+            ):
+                fragment_probability *= CACHED_TOKEN_PROBABILITY[token_fragment]
+                fragment_information += CACHED_TOKEN_INFORMATION[token_fragment]
+                break
 
+            fragment_probability *= token_probability[token_fragment]
             updated_probability_values.append(
                 token_probability[token_fragment]
             )
 
-            updated_information += token_information[token_fragment]
-            logger.debug(f'Current token fragment information: {updated_information}')
-
+            fragment_information += token_information[token_fragment]
             updated_information_values.append(
                 token_information[token_fragment]
             )
 
-        updated_probability *= fragment_prob
-        logger.info(f'Updating token path probability')
-        logger.debug(f'Current token path probability: {updated_probability}')
+        if (
+            token not in CACHED_TOKEN_PROBABILITY
+            or token not in CACHED_TOKEN_INFORMATION
+        ):
+            CACHED_TOKEN_PROBABILITY[token] = fragment_probability
+            CACHED_TOKEN_INFORMATION[token] = fragment_information
 
+        updated_probability *= fragment_probability
+        updated_information += fragment_information
         updated_tokens.append(token)
-        logger.info(f'Updating token path')
-        logger.debug(f'Current token path: {updated_tokens}')
-
-        logger.info('Recurse to next set of tokens')
         calculated_paths = _generate_next_tokens(
             build,
             build_index=build_index + i,
@@ -207,11 +204,7 @@ def _generate_next_tokens(
             token_probability=token_probability,
             token_information=token_information
         )
-
-        logger.info('Accumulating generated token paths')
         all_paths.extend(calculated_paths)
-
-    logger.info('Completed generating token paths')
 
     return all_paths
 
