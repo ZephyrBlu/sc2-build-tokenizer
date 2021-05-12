@@ -15,6 +15,7 @@ class ParsedBuild:
 
 @dataclass
 class TokenizedBuild:
+    race: str
     tokens: list
     probability: float
     probability_values: list
@@ -23,6 +24,7 @@ class TokenizedBuild:
 
     def to_json(self):
         return {
+            'race': self.race,
             'tokens': self.tokens,
             'probability': self.probability,
             'probability_values': self.probability_values,

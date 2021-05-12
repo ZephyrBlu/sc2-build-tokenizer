@@ -34,7 +34,7 @@ def _recurse(dir_path, fn=None):
         if obj_path.is_file():
             try:
                 replay = parse_replay(obj_path, local=True, network=False)
-                logger.info(f'Parsed replay: {dir_path.name}')
+                logger.info(f'Parsed replay: {obj_path.name}')
             except Exception:
                 ERRORS[traceback.format_exc()] += 1
                 logger.error(f'An error occured during parsing: {traceback.format_exc()}')

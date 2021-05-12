@@ -13,6 +13,9 @@ from sc2_build_tokenizer.data import TOKEN_INFORMATION
 CACHED_TOKEN_PROBABILITY = {}
 CACHED_TOKEN_INFORMATION = {}
 
+CACHED_PROBABILITY_VALUES = {}
+CACHED_INFORMATION_VALUES = {}
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,6 +117,7 @@ def generate_token_distributions(source):
 
 
 def _generate_next_tokens(
+    race,
     build,
     *,
     max_token_size=8,
@@ -129,17 +133,6 @@ def _generate_next_tokens(
     all_paths = []
     # generate new path information for each possible new token
     for i in range(1, max_token_size + 1):
-        # exit if we're at the end of the build
-        if build_index + i > len(build):
-            all_paths.append(TokenizedBuild(
-                build_tokens,
-                probability,
-                probability_values,
-                information,
-                information_values,
-            ))
-            return all_paths
-
         updated_tokens = copy.copy(build_tokens)
         updated_probability = probability
         updated_probability_values = copy.copy(probability_values)
@@ -153,10 +146,14 @@ def _generate_next_tokens(
         # if we don't have a record of the preceding sequence,
         # it was too unlikely to record so we bail
         if token not in token_probability:
+            logger.debug(f'Token probability not found: {token}')
             continue
 
         fragment_probability = 1
         fragment_information = 0
+
+        fragment_probability_values = []
+        fragment_information_values = []
 
         # start from full token and work backwards looking for cache hit
         for index in range(len(token), 0, -1):
@@ -171,15 +168,18 @@ def _generate_next_tokens(
             ):
                 fragment_probability *= CACHED_TOKEN_PROBABILITY[token_fragment]
                 fragment_information += CACHED_TOKEN_INFORMATION[token_fragment]
+
+                fragment_probability_values.extend(CACHED_PROBABILITY_VALUES[token_fragment])
+                fragment_information_values.extend(CACHED_INFORMATION_VALUES[token_fragment])
                 break
 
             fragment_probability *= token_probability[token_fragment]
-            updated_probability_values.append(
+            fragment_probability_values.append(
                 token_probability[token_fragment]
             )
 
             fragment_information += token_information[token_fragment]
-            updated_information_values.append(
+            fragment_information_values.append(
                 token_information[token_fragment]
             )
 
@@ -190,10 +190,35 @@ def _generate_next_tokens(
             CACHED_TOKEN_PROBABILITY[token] = fragment_probability
             CACHED_TOKEN_INFORMATION[token] = fragment_information
 
+        if (
+            token not in CACHED_PROBABILITY_VALUES
+            or token not in CACHED_INFORMATION_VALUES
+        ):
+            CACHED_PROBABILITY_VALUES[token] = fragment_probability_values[::-1]
+            CACHED_INFORMATION_VALUES[token] = fragment_information_values[::-1]
+
         updated_probability *= fragment_probability
         updated_information += fragment_information
+
+        updated_probability_values.extend(fragment_probability_values[::-1])
+        updated_information_values.extend(fragment_information_values[::-1])
+
         updated_tokens.append(token)
+
+        # exit if we're at the end of the build
+        if build_index + i >= len(build):
+            all_paths.append(TokenizedBuild(
+                race,
+                updated_tokens,
+                updated_probability,
+                updated_probability_values,
+                updated_information,
+                updated_information_values,
+            ))
+            break
+
         calculated_paths = _generate_next_tokens(
+            race,
             build,
             build_index=build_index + i,
             build_tokens=updated_tokens,
@@ -234,6 +259,7 @@ def generate_token_paths(
             logger.debug(f'Setting token information to {player_race} / {opp_race}')
 
     paths = _generate_next_tokens(
+        player_race,
         build,
         token_probability=token_probability,
         token_information=token_information,

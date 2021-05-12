@@ -1,4 +1,5 @@
-/IEM
+/replays
+*.SC2Replay
 restats
 
 # Byte-compiled / optimized / DLL files
