@@ -4,11 +4,15 @@ from dataclasses import dataclass
 @dataclass
 class ParsedBuild:
     race: str
+    # player: str
+    # max_collection_rate: int
     build: list
 
     def to_json(self):
         return {
             'race': self.race,
+            # 'player': self.player,
+            # 'max_collection_rate': self.max_collection_rate,
             'build': self.build,
         }
 
@@ -16,6 +20,8 @@ class ParsedBuild:
 @dataclass
 class TokenizedBuild:
     race: str
+    # player: str
+    # max_collection_rate: int
     tokens: list
     probability: float
     probability_values: list
@@ -25,6 +31,8 @@ class TokenizedBuild:
     def to_json(self):
         return {
             'race': self.race,
+            # 'player': self.player,
+            # 'max_collection_rate': self.max_collection_rate,
             'tokens': self.tokens,
             'probability': self.probability,
             'probability_values': self.probability_values,

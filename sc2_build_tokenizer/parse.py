@@ -69,7 +69,11 @@ def extract_builds(replays, end=SEVEN_MINUTES, ignore=IGNORE_OBJECTS):
             player_build = ParsedBuild(player.race, [])
 
             logger.debug(f'Iterating through player objects')
-            for obj in player.objects.values():
+            sorted_objects = sorted(
+                list(player.objects.values()),
+                key=lambda obj: obj.init_time,
+            )
+            for obj in sorted_objects:
                 if (
                     not obj.birth_time
                     or obj.birth_time > end

@@ -120,7 +120,7 @@ def _generate_next_tokens(
     race,
     build,
     *,
-    max_token_size=8,
+    max_token_size=4,
     build_index=0,
     build_tokens=[],
     probability=1,

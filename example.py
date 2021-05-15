@@ -95,9 +95,7 @@ def manual_tokenize(
             tokenized_builds = []
             print(f'{len(parsed_builds)} Games')
             for count, game in enumerate(parsed_builds):
-                matchup = sorted(['Terran', 'Terran'])
                 races = []
-                race = 'Terran'
                 for build in game:
                     races.append(build.race)
                 races.sort()
@@ -118,9 +116,6 @@ def manual_tokenize(
                     )
                     optimal_path = paths[0]
                     game_builds.append(optimal_path)
-                    if races == matchup:
-                        print(build.race, opp_race)
-                        print(paths, '\n\n')
                 tokenized_builds.append(game_builds)
                 print(f'Completed game {count + 1}')
 
@@ -146,8 +141,8 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    matchup = sorted(['Protoss', 'Protoss'])
-    race = 'Protoss'
+    matchup = sorted(['Protoss', 'Terran'])
+    race = 'Terran'
     opener = defaultdict(int)
     mu = 0
     for game in tokenized_builds:
@@ -164,19 +159,73 @@ def manual_tokenize(
         for build in game:
             if build.race == race:
                 opening_build = []
+                mid_build = []
                 build_index = 0
                 total_buildings = 0
-                while total_buildings < 3 and build_index < len(build.tokens):
-                    opening_build.append(build.tokens[build_index])
-                    total_buildings += len(build.tokens[build_index])
+                o_b = 0
+                while total_buildings < 4 and build_index < len(build.tokens):
+                    if o_b < 4:
+                        opening_build.append(build.tokens[build_index])
+                        o_b += len(build.tokens[build_index])
+                    else:
+                        mid_build.append(build.tokens[build_index])
+                        total_buildings += len(build.tokens[build_index])
                     build_index += 1
-                print(opening_build, '\n')
+                print(build.tokens, '\n')
                 opener[tuple(opening_build)] += 1
 
-    print(mu)
+    print(f'{mu} games')
     top_openers = sorted(list(opener.items()), key=lambda o: o[1], reverse=True)
     for o, c in top_openers:
         print(c, o)
+
+    mu_builds = []
+    for game in parsed_builds:
+        races = []
+        for build in game:
+            races.append(build.race)
+        races.sort()
+
+        if races != matchup:
+            continue
+
+        for build in game:
+            if build.race == race:
+                mu_builds.append(build.build)
+
+    from difflib import SequenceMatcher
+    for build in mu_builds:
+        for other in mu_builds:
+            s = SequenceMatcher(None, build, other)
+            b = s.get_matching_blocks()
+
+            build_matches = []
+            other_matches = []
+            for match in b:
+                for i in range(match.a, match.a + match.size):
+                    build_matches.append(i)
+
+                for i in range(match.b, match.b + match.size):
+                    other_matches.append(i)
+
+            for index, building in enumerate(build):
+                # if non-matching building
+                if index not in build_matches:
+                    # calculate tf-idf and add to total
+                    # tf = building count in current build
+                    # idf = fraction of builds containing building
+                    # OR
+                    # idf = building frequency over all builds
+                    pass
+
+            print(s.ratio())
+            print(build_matches)
+            print(other_matches)
+            print(b)
+            print(build)
+            print(other)
+            print('\n')
+        break
 
     # ----------------------
     # tokenized test replay
