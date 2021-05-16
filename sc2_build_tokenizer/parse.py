@@ -66,11 +66,18 @@ def extract_builds(replays, end=SEVEN_MINUTES, ignore=IGNORE_OBJECTS):
         replay_builds = []
         for p_id, player in replay.players.items():
             logger.debug(f'Recording {player.race} build')
-            player_build = ParsedBuild(player.race, [])
+            player_build = ParsedBuild(
+                player.race,
+                player.name,
+                replay.metadata['game_length'],
+                min(replay.summary['max_collection_rate'].values()),
+                [],
+            )
 
             logger.debug(f'Iterating through player objects')
+            filtered_objects = list(filter(lambda obj: obj.init_time, player.objects.values()))
             sorted_objects = sorted(
-                list(player.objects.values()),
+                filtered_objects,
                 key=lambda obj: obj.init_time,
             )
             for obj in sorted_objects:
@@ -82,8 +89,8 @@ def extract_builds(replays, end=SEVEN_MINUTES, ignore=IGNORE_OBJECTS):
                     continue
 
                 if 'BUILDING' in obj.type:
-                    player_build.build.append(obj.name_at_gameloop(0))
-                    logger.debug(f'Recording {obj.name_at_gameloop(0)}')
+                    player_build.build.append((obj.name_at_gameloop(0), obj.init_time))
+                    logger.debug(f'Recording {obj.name_at_gameloop(0)}, @{obj.init_time}')
 
             replay_builds.append(player_build)
             logger.debug(f'Finished recording {player.race} build')

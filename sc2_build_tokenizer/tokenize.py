@@ -23,22 +23,23 @@ def generate_build_tokens(build, source=None):
     logger.info('Generating tokens from parsed build')
 
     build_tokens = source
+    buildings = list(map(lambda x: x[0], build))
     if not source:
         logger.info('No source supplied, recording token counts locally')
         build_tokens = defaultdict(int)
 
     logger.info('Iterating through build')
-    for i in range(0, len(build)):
-        logger.debug(f'Generating tokens for {build[i]} (Index: {i})')
+    for i in range(0, len(buildings)):
+        logger.debug(f'Generating tokens for {buildings[i]} (Index: {i})')
         for index in range(1, 9):
-            token = tuple(build[i:i + index])
+            token = tuple(buildings[i:i + index])
             logger.debug(f'Found token: {token}')
 
             build_tokens[token] += 1
             logger.debug(f'Incrementing token count to {build_tokens[token]}')
 
             # exit if we're at the end of the build
-            if i + index >= len(build):
+            if i + index >= len(buildings):
                 logger.debug('Reached end of build')
                 break
 
@@ -118,6 +119,8 @@ def generate_token_distributions(source):
 
 def _generate_next_tokens(
     race,
+    player,
+    max_collection_rate,
     build,
     *,
     max_token_size=4,
@@ -209,6 +212,8 @@ def _generate_next_tokens(
         if build_index + i >= len(build):
             all_paths.append(TokenizedBuild(
                 race,
+                player,
+                max_collection_rate,
                 updated_tokens,
                 updated_probability,
                 updated_probability_values,
@@ -219,6 +224,8 @@ def _generate_next_tokens(
 
         calculated_paths = _generate_next_tokens(
             race,
+            player,
+            max_collection_rate,
             build,
             build_index=build_index + i,
             build_tokens=updated_tokens,
@@ -238,6 +245,8 @@ def generate_token_paths(
     build,
     player_race,
     opp_race,
+    player_name,
+    max_collection_rate,
     token_probability=TOKEN_PROBABILITY,
     token_information=TOKEN_INFORMATION,
 ):
@@ -258,9 +267,12 @@ def generate_token_paths(
             token_information = token_information[player_race][opp_race]
             logger.debug(f'Setting token information to {player_race} / {opp_race}')
 
+    buildings = list(map(lambda x: x[0], build))
     paths = _generate_next_tokens(
         player_race,
-        build,
+        player_name,
+        max_collection_rate,
+        buildings,
         token_probability=token_probability,
         token_information=token_information,
     )

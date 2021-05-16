@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+import math
 from collections import defaultdict
 
 from sc2_build_tokenizer import (
@@ -12,7 +13,7 @@ from sc2_build_tokenizer.dataclasses import ParsedBuild, TokenizedBuild
 from sc2_build_tokenizer.data import PARSED_BUILDS, TOKENIZED_BUILDS
 
 TEST_REPLAY_PATH = Path('replays/IEM/1 - Playoffs/Finals/Reynor vs Zest/20210228 - GAME 1 - Reynor vs Zest - Z vs P - Oxide LE.SC2Replay')
-REPLAY_PATH = Path('replays')
+REPLAY_PATH = Path('replays/IEM')
 
 BUILD_TOKENS = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 TOKEN_PROBABILITY = defaultdict(lambda: defaultdict(dict))
@@ -42,11 +43,19 @@ def manual_tokenize(
             parsed_builds,
         ))
 
-        with open('sc2_build_tokenizer/data/parsed_builds.py', 'w') as builds:
+        with open('sc2_build_tokenizer/data/parsed_builds.py', 'w', encoding='utf-8') as builds:
             builds.write(f'PARSED_BUILDS = {serialized_builds}')
     else:
         parsed_builds = list(map(
-            lambda game: list([ParsedBuild(build['race'], build['build']) for build in game]),
+            lambda game: list([
+                ParsedBuild(
+                    build['race'],
+                    build['player'],
+                    build['game_length'],
+                    build['max_collection_rate'],
+                    build['build'],
+                ) for build in game
+            ]),
             PARSED_BUILDS,
         ))
 
@@ -111,6 +120,8 @@ def manual_tokenize(
                         build.build,
                         build.race,
                         opp_race,
+                        build.player,
+                        build.max_collection_rate,
                         TOKEN_PROBABILITY,
                         TOKEN_INFORMATION,
                     )
@@ -131,6 +142,8 @@ def manual_tokenize(
                 lambda game: list([
                     TokenizedBuild(
                         build['race'],
+                        build['player'],
+                        build['max_collection_rate'],
                         build['tokens'],
                         build['probability'],
                         build['probability_values'],
@@ -141,8 +154,10 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    matchup = sorted(['Protoss', 'Terran'])
-    race = 'Terran'
+    race2 = 'Terran'
+    race1 = 'Zerg'
+    matchup = sorted([race1, race2])
+    race = 'Zerg'
     opener = defaultdict(int)
     mu = 0
     for game in tokenized_builds:
@@ -191,16 +206,48 @@ def manual_tokenize(
 
         for build in game:
             if build.race == race:
-                mu_builds.append(build.build)
+                mu_builds.append(build)
 
     from difflib import SequenceMatcher
+
+    matched_builds = []
     for build in mu_builds:
+        # less than 2 base
+        if build.max_collection_rate < 2500:
+            continue
+
         for other in mu_builds:
-            s = SequenceMatcher(None, build, other)
+            # less than 2 base
+            if other.max_collection_rate < 2500:
+                continue
+
+            min_build_length = max(build.build[-1][1], other.build[-1][1])
+            filtered_build = list(
+                map(
+                    lambda x: x[0],
+                    filter(
+                        lambda x: x[1] <= min_build_length,
+                        build.build,
+                    ),
+                )
+            )
+            filtered_other = list(
+                map(
+                    lambda x: x[0],
+                    filter(
+                        lambda x: x[1] <= min_build_length,
+                        other.build,
+                    ),
+                )
+            )
+
+            s = SequenceMatcher(None, filtered_build, filtered_other)
             b = s.get_matching_blocks()
 
             build_matches = []
             other_matches = []
+            compare_values = []
+
             for match in b:
                 for i in range(match.a, match.a + match.size):
                     build_matches.append(i)
@@ -208,24 +255,73 @@ def manual_tokenize(
                 for i in range(match.b, match.b + match.size):
                     other_matches.append(i)
 
-            for index, building in enumerate(build):
-                # if non-matching building
-                if index not in build_matches:
-                    # calculate tf-idf and add to total
-                    # tf = building count in current build
-                    # idf = fraction of builds containing building
-                    # OR
-                    # idf = building frequency over all builds
-                    pass
+            comparison_builds = [
+                (filtered_build, build_matches),
+                (filtered_other, other_matches),
+            ]
+            comparison_weight = defaultdict(int)
+            for mod, (compare_build, compare_matches) in enumerate(comparison_builds):
+                compare_missing = {}
+                compare_buildings = []
+                for index, building in enumerate(compare_build):
+                    # if non-matching building
+                    if index not in compare_matches:
+                        compare_missing[building] = 0
+                        compare_buildings.append((building, index))
 
-            print(s.ratio())
-            print(build_matches)
-            print(other_matches)
-            print(b)
-            print(build)
-            print(other)
-            print('\n')
+                for building in compare_build:
+                    if building in compare_missing:
+                        compare_missing[building] += 1
+
+                for building, index in compare_buildings:
+                    probability = TOKEN_PROBABILITY[race1][race2][(building,)]
+                    information = -math.log2(probability)
+                    tf_idf = (1 / compare_missing[building]) * information
+                    comparison_weight[building] += (1 / (index + 1)) * tf_idf  # ((-1) ** (mod + 1)) * tf_idf
+                    compare_values.append((building, compare_missing[building], round(information, 1), round((1 / (index + 1)) * tf_idf, 1)))
+
+            # calculate tf-idf and add to total
+            # tf = building count in current build
+            # idf = fraction of builds containing building
+            # OR
+            # idf = building frequency over all builds
+
+            matched_builds.append((
+                s.ratio(),
+                sum([abs(v) for v in comparison_weight.values()]),
+                comparison_weight,
+                compare_values,
+                filtered_build,
+                filtered_other,
+            ))
+
+            # print(s.ratio())
+            # print(
+            #     build.player, '/', other.player,
+            #     '|', build.max_collection_rate, '/', other.max_collection_rate,
+            #     '|', round(build.game_length * 22.4), '/', round(other.game_length * 22.4),
+            # )
+            # print(compare_diff)  # , compare_values)
+            # print(build_matches)
+            # print(other_matches)
+            # print('Max Gameloops:', min_build_length)
+            # print(b)
+            # print(build.build)
+            # print(other.build)
+            # print('\n')
+            # print(filtered_build)
+            # print(filtered_other)
+            # print('')
         break
+
+    matched_builds.sort(key=lambda build: build[1])
+    for r, d, dv, v, b, o in matched_builds:
+        print(round(r, 1), round(d, 1))
+        print(dv)
+        print(v)
+        print(b)
+        print(o)
+        print('')
 
     # ----------------------
     # tokenized test replay
