@@ -154,10 +154,10 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    race1 = 'Terran'
-    race2 = 'Protoss'
+    race1 = 'Protoss'
+    race2 = 'Terran'
     matchup = sorted([race1, race2])
-    race = 'Terran'
+    race = 'Protoss'
     opener = defaultdict(int)
     mu = 0
     for game in tokenized_builds:
@@ -247,6 +247,7 @@ def manual_tokenize(
             build_matches = []
             other_matches = []
             compare_values = []
+            compare_diff = 0
 
             for match in b:
                 for i in range(match.a, match.a + match.size):
@@ -277,8 +278,9 @@ def manual_tokenize(
                     probability = TOKEN_PROBABILITY[race1][race2][(building,)]
                     information = -math.log2(probability)
                     tf_idf = (1 / compare_missing[building]) * information
-                    comparison_weight[building] += (1 / (index + 1)) * tf_idf  # ((-1) ** (mod + 1)) * tf_idf
-                    compare_values.append((building, compare_missing[building], round(information, 1), round((1 / (index + 1)) * tf_idf, 1)))
+                    comparison_weight[building] += (1 / (index if index != 0 else index + 1)) * tf_idf
+                    compare_diff += (1 / (index if index != 0 else index + 1)) * tf_idf
+                    compare_values.append((building, compare_missing[building], round(information, 1), round((1 / (index if index != 0 else index + 1)) * tf_idf, 1)))
 
             # calculate tf-idf and add to total
             # tf = building count in current build
@@ -288,7 +290,7 @@ def manual_tokenize(
 
             matched_builds.append((
                 s.ratio(),
-                sum([abs(v) for v in comparison_weight.values()]),
+                compare_diff,
                 comparison_weight,
                 compare_values,
                 filtered_build,
@@ -316,7 +318,7 @@ def manual_tokenize(
 
     matched_builds.sort(key=lambda build: build[1])
     for r, d, dv, v, b, o in matched_builds:
-        print(round(r, 1), round(d, 1))
+        print(round(r, 1), round(d, 3))
         print(dv)
         print(v)
         print(b)
