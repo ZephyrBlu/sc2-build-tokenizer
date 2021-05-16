@@ -154,10 +154,10 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    race2 = 'Terran'
-    race1 = 'Zerg'
+    race1 = 'Terran'
+    race2 = 'Protoss'
     matchup = sorted([race1, race2])
-    race = 'Zerg'
+    race = 'Terran'
     opener = defaultdict(int)
     mu = 0
     for game in tokenized_builds:
@@ -226,7 +226,7 @@ def manual_tokenize(
                 map(
                     lambda x: x[0],
                     filter(
-                        lambda x: x[1] <= min_build_length,
+                        lambda x: x[1] <= min_build_length and 'Reactor' not in x[0] and 'TechLab' not in x[0],
                         build.build,
                     ),
                 )
@@ -235,7 +235,7 @@ def manual_tokenize(
                 map(
                     lambda x: x[0],
                     filter(
-                        lambda x: x[1] <= min_build_length,
+                        lambda x: x[1] <= min_build_length and 'Reactor' not in x[0] and 'TechLab' not in x[0],
                         other.build,
                     ),
                 )
