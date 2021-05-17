@@ -13,13 +13,13 @@ from sc2_build_tokenizer.dataclasses import ParsedBuild, TokenizedBuild
 from sc2_build_tokenizer.data import PARSED_BUILDS, TOKENIZED_BUILDS
 
 TEST_REPLAY_PATH = Path('replays/IEM/1 - Playoffs/Finals/Reynor vs Zest/20210228 - GAME 1 - Reynor vs Zest - Z vs P - Oxide LE.SC2Replay')
-REPLAY_PATH = Path('replays/IEM')
+REPLAY_PATH = Path('replays')
 
 BUILD_TOKENS = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 TOKEN_PROBABILITY = defaultdict(lambda: defaultdict(dict))
 TOKEN_INFORMATION = defaultdict(lambda: defaultdict(dict))
 
-# logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 
 def to_dict(struct):
@@ -155,12 +155,15 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    race1 = 'Protoss'
     race2 = 'Terran'
+    race1 = 'Protoss'
+    MAX_COMPARISON_DIFF = 20
+    MIN_MINING_BASES = 3
     matchup = sorted([race1, race2])
-    race = 'Protoss'
+    race = race1
     opener = defaultdict(int)
     mu = 0
+    macro = 0
     for game in tokenized_builds:
         races = []
         for build in game:
@@ -196,6 +199,7 @@ def manual_tokenize(
     #     print(c, o)
 
     mu_builds = []
+    stuff = set()
     for game in parsed_builds:
         races = []
         for build in game:
@@ -211,11 +215,13 @@ def manual_tokenize(
 
     from difflib import SequenceMatcher
 
-    matched_builds = defaultdict(list)
+    matched_builds = defaultdict(dict)
     for build_id, build in enumerate(mu_builds):
         # less than 2 base
-        if build.max_collection_rate < 2500:
+        if build.max_collection_rate < (888 * MIN_MINING_BASES):
             continue
+
+        macro += 1
 
         for other_id, other in enumerate(mu_builds):
             # same build
@@ -223,7 +229,7 @@ def manual_tokenize(
                 continue
 
             # less than 2 base
-            if other.max_collection_rate < 2500:
+            if other.max_collection_rate < (888 * MIN_MINING_BASES):
                 continue
 
             min_build_length = max(build.build[-1][1], other.build[-1][1])
@@ -283,9 +289,9 @@ def manual_tokenize(
                     probability = TOKEN_PROBABILITY[race1][race2][(building,)]
                     information = -math.log2(probability)
                     tf_idf = (1 / compare_missing[building]) * information
-                    comparison_weight[building] += (1 / (index if index != 0 else index + 1)) * tf_idf
-                    compare_diff += (1 / (index if index != 0 else index + 1)) * tf_idf
-                    compare_values.append((building, compare_missing[building], round(information, 1), round((1 / (index if index != 0 else index + 1)) * tf_idf, 1)))
+                    comparison_weight[building] += tf_idf  # (1 / (index if index != 0 else index + 1)) * 
+                    compare_diff += tf_idf
+                    compare_values.append((building, compare_missing[building], round(information, 1), round(tf_idf, 1)))
 
             # calculate tf-idf and add to total
             # tf = building count in current build
@@ -293,10 +299,10 @@ def manual_tokenize(
             # OR
             # idf = building frequency over all builds
 
-            if compare_diff > 1:
+            if compare_diff > MAX_COMPARISON_DIFF:
                 continue
 
-            matched_builds[(build_id, tuple(build.build))].append((
+            matched_builds[(build_id, tuple(filtered_build))][other_id] = (
                 other_id,
                 s.ratio(),
                 compare_diff,
@@ -304,7 +310,9 @@ def manual_tokenize(
                 compare_values,
                 filtered_build,
                 filtered_other,
-            ))
+            )
+            # stuff.add(tuple(sorted([build_id, other_id])))
+            stuff.update([build_id, other_id])
 
             # print(s.ratio())
             # print(
@@ -323,35 +331,55 @@ def manual_tokenize(
             # print(filtered_build)
             # print(filtered_other)
             # print('')
-        break
 
     build_clusters = list(matched_builds.items())
     # sort based on size of build cluster
-    build_clusters.sort(key=lambda cluster: len(cluster[1]))
-    print(build_clusters)
+    build_clusters.sort(key=lambda cluster: len(cluster[1]), reverse=True)
+    print('Original Clusters', len(build_clusters))
+    for c, b in build_clusters:
+        print(c[0], [build[0] for build in b.values()])
 
+    filtered_clusters = defaultdict(dict)
     seen_builds = set()
-    filtered_clusters = defaultdict(list)
     for cluster, cluster_builds in build_clusters:
-        # if cluster build has already been seen we don't care about
-        # this cluster anymore
-        if cluster[0] in seen_builds:
-            continue
-
-        # add build id
-        seen_builds.add(cluster[0])
-
-        for build in cluster_builds:
-            # if a build in the cluster has already been seen
-            # we don't care about it anymore
-            if build[0] in seen_builds:
+        for build_id, build in cluster_builds.items():
+            if build_id in seen_builds:
                 continue
 
-            filtered_clusters[cluster].append(build)
-            # add build id
-            seen_builds.add(build[0])
+            # min_cluster_diff = build[2]
+            # for other_cluster, other_cluster_builds in build_clusters:
+            #     if other_id in other_cluster_builds:
+            #         if other_cluster_builds[other_id][2] < min_cluster_diff:
+            #             min_cluster_diff = other_cluster_builds[other_id][2]
+            #             break
 
-    print(filtered_clusters, len(filtered_clusters))
+            # if min_cluster_diff == build[2]:
+            filtered_clusters[cluster][build_id] = build
+            seen_builds.add(build_id)
+
+    # for cluster, cluster_builds in build_clusters:
+    #     for other_cluster, other_cluster_builds in build_clusters:
+    #         # if the other cl
+    #         if cluster[0] in other_cluster_builds:
+
+    print('\n')
+    total_builds = 0
+    for c, b in filtered_clusters.items():
+        if len(b) < 2:
+            continue
+
+        print(len(b), c)
+        print('-----')
+        for build in b.values():
+            print(round(build[2], 2), build[0], build[-1], build[3])
+        print('\n')
+        total_builds += len(b.values())
+
+    print(len(stuff), '/', len(mu_builds), f'({round((len(stuff) / len(mu_builds)) * 100, 1)}%)')
+    print('')
+    print(macro, '/', len(mu_builds), f'({round((macro / len(mu_builds)) * 100, 1)}%)')
+    print(total_builds, '/', macro, f'({round((total_builds / macro) * 100, 1)}%)')
+    print(total_builds, '/', len(mu_builds), f'({round((total_builds / len(mu_builds)) * 100, 1)}%)')
 
     # matched_builds.sort(key=lambda build: build[1])
     # for r, d, dv, v, b, o in matched_builds:
@@ -412,8 +440,8 @@ def manual_tokenize(
 # cProfile.run('''
 manual_tokenize(
     _test=False,
-    _write_builds=False,
-    _write_distributions=False,
+    _write_builds=True,
+    _write_distributions=True,
     _write_tokenized=False,
 )
 # ''', 'restats')
