@@ -7,6 +7,7 @@ class ParsedBuild:
     player: str
     game_length: int
     max_collection_rate: int
+    win: bool
     build: list
 
     def to_json(self):
@@ -15,6 +16,7 @@ class ParsedBuild:
             'player': self.player,
             'game_length': self.game_length,
             'max_collection_rate': self.max_collection_rate,
+            'win': self.win,
             'build': self.build,
         }
 

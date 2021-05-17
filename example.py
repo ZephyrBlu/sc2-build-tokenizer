@@ -53,6 +53,7 @@ def manual_tokenize(
                     build['player'],
                     build['game_length'],
                     build['max_collection_rate'],
+                    build['win'],
                     build['build'],
                 ) for build in game
             ]),
@@ -186,13 +187,13 @@ def manual_tokenize(
                         mid_build.append(build.tokens[build_index])
                         total_buildings += len(build.tokens[build_index])
                     build_index += 1
-                print(build.tokens, '\n')
+                # print(build.tokens, '\n')
                 opener[tuple(opening_build)] += 1
 
-    print(f'{mu} games')
-    top_openers = sorted(list(opener.items()), key=lambda o: o[1], reverse=True)
-    for o, c in top_openers:
-        print(c, o)
+    # print(f'{mu} games')
+    # top_openers = sorted(list(opener.items()), key=lambda o: o[1], reverse=True)
+    # for o, c in top_openers:
+    #     print(c, o)
 
     mu_builds = []
     for game in parsed_builds:
@@ -210,13 +211,17 @@ def manual_tokenize(
 
     from difflib import SequenceMatcher
 
-    matched_builds = []
-    for build in mu_builds:
+    matched_builds = defaultdict(list)
+    for build_id, build in enumerate(mu_builds):
         # less than 2 base
         if build.max_collection_rate < 2500:
             continue
 
-        for other in mu_builds:
+        for other_id, other in enumerate(mu_builds):
+            # same build
+            if build_id == other_id:
+                continue
+
             # less than 2 base
             if other.max_collection_rate < 2500:
                 continue
@@ -288,7 +293,11 @@ def manual_tokenize(
             # OR
             # idf = building frequency over all builds
 
-            matched_builds.append((
+            if compare_diff > 1:
+                continue
+
+            matched_builds[(build_id, tuple(build.build))].append((
+                other_id,
                 s.ratio(),
                 compare_diff,
                 comparison_weight,
@@ -316,14 +325,42 @@ def manual_tokenize(
             # print('')
         break
 
-    matched_builds.sort(key=lambda build: build[1])
-    for r, d, dv, v, b, o in matched_builds:
-        print(round(r, 1), round(d, 3))
-        print(dv)
-        print(v)
-        print(b)
-        print(o)
-        print('')
+    build_clusters = list(matched_builds.items())
+    # sort based on size of build cluster
+    build_clusters.sort(key=lambda cluster: len(cluster[1]))
+    print(build_clusters)
+
+    seen_builds = set()
+    filtered_clusters = defaultdict(list)
+    for cluster, cluster_builds in build_clusters:
+        # if cluster build has already been seen we don't care about
+        # this cluster anymore
+        if cluster[0] in seen_builds:
+            continue
+
+        # add build id
+        seen_builds.add(cluster[0])
+
+        for build in cluster_builds:
+            # if a build in the cluster has already been seen
+            # we don't care about it anymore
+            if build[0] in seen_builds:
+                continue
+
+            filtered_clusters[cluster].append(build)
+            # add build id
+            seen_builds.add(build[0])
+
+    print(filtered_clusters, len(filtered_clusters))
+
+    # matched_builds.sort(key=lambda build: build[1])
+    # for r, d, dv, v, b, o in matched_builds:
+    #     print(round(r, 1), round(d, 3))
+    #     print(dv)
+    #     print(v)
+    #     print(b)
+    #     print(o)
+    #     print('')
 
     # ----------------------
     # tokenized test replay

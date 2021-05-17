@@ -71,19 +71,19 @@ def extract_builds(replays, end=SEVEN_MINUTES, ignore=IGNORE_OBJECTS):
                 player.name,
                 replay.metadata['game_length'],
                 min(replay.summary['max_collection_rate'].values()),
+                replay.metadata['winner'] == p_id,
                 [],
             )
 
             logger.debug(f'Iterating through player objects')
-            filtered_objects = list(filter(lambda obj: obj.init_time, player.objects.values()))
+            filtered_objects = list(filter(lambda obj: obj.init_time and obj.birth_time, player.objects.values()))
             sorted_objects = sorted(
                 filtered_objects,
                 key=lambda obj: obj.init_time,
             )
             for obj in sorted_objects:
                 if (
-                    not obj.birth_time
-                    or obj.birth_time > end
+                    obj.init_time > end
                     or obj.name_at_gameloop(0) in ignore
                 ):
                     continue
