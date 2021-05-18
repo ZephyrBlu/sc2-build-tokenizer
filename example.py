@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+from difflib import SequenceMatcher
 import math
 from collections import defaultdict
 
@@ -19,7 +20,7 @@ BUILD_TOKENS = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 TOKEN_PROBABILITY = defaultdict(lambda: defaultdict(dict))
 TOKEN_INFORMATION = defaultdict(lambda: defaultdict(dict))
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 def to_dict(struct):
@@ -155,9 +156,9 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    race2 = 'Terran'
-    race1 = 'Protoss'
-    MAX_COMPARISON_DIFF = 20
+    race2 = 'Zerg'
+    race1 = 'Terran'
+    MAX_COMPARISON_DIFF = 3
     MIN_MINING_BASES = 3
     matchup = sorted([race1, race2])
     race = race1
@@ -213,9 +214,10 @@ def manual_tokenize(
             if build.race == race:
                 mu_builds.append(build)
 
-    from difflib import SequenceMatcher
-
     matched_builds = defaultdict(dict)
+    filtered_builds = defaultdict(int)
+    seen_builds = set()
+
     for build_id, build in enumerate(mu_builds):
         # less than 2 base
         if build.max_collection_rate < (888 * MIN_MINING_BASES):
@@ -252,7 +254,19 @@ def manual_tokenize(
                 )
             )
 
-            s = SequenceMatcher(None, filtered_build, filtered_other)
+            if filtered_build == filtered_other and other_id not in seen_builds:
+                filtered_builds[(tuple(filtered_build))] += 1
+                seen_builds.add(other_id)
+
+        seen_builds.add(build_id)
+
+    for build_id, build in enumerate(filtered_builds.keys()):
+        for other_id, other in enumerate(filtered_builds.keys()):
+            # same build
+            if build_id == other_id:
+                continue
+
+            s = SequenceMatcher(None, build, other)
             b = s.get_matching_blocks()
 
             build_matches = []
@@ -268,8 +282,8 @@ def manual_tokenize(
                     other_matches.append(i)
 
             comparison_builds = [
-                (filtered_build, build_matches),
-                (filtered_other, other_matches),
+                (build, build_matches),
+                (other, other_matches),
             ]
             comparison_weight = defaultdict(int)
             for mod, (compare_build, compare_matches) in enumerate(comparison_builds):
@@ -302,14 +316,14 @@ def manual_tokenize(
             if compare_diff > MAX_COMPARISON_DIFF:
                 continue
 
-            matched_builds[(build_id, tuple(filtered_build))][other_id] = (
+            matched_builds[(build_id, filtered_builds[tuple(build)], tuple(build))][other_id] = (
                 other_id,
                 s.ratio(),
                 compare_diff,
                 comparison_weight,
                 compare_values,
-                filtered_build,
-                filtered_other,
+                build,
+                other,
             )
             # stuff.add(tuple(sorted([build_id, other_id])))
             stuff.update([build_id, other_id])
@@ -335,6 +349,11 @@ def manual_tokenize(
     build_clusters = list(matched_builds.items())
     # sort based on size of build cluster
     build_clusters.sort(key=lambda cluster: len(cluster[1]), reverse=True)
+
+    print('Identical Clusters', len(filtered_builds))
+    for b, c in sorted(list(filtered_builds.items()), key=lambda x: x[1], reverse=True):
+        print(c, b)
+
     print('Original Clusters', len(build_clusters))
     for c, b in build_clusters:
         print(c[0], [build[0] for build in b.values()])
@@ -365,15 +384,15 @@ def manual_tokenize(
     print('\n')
     total_builds = 0
     for c, b in filtered_clusters.items():
-        if len(b) < 2:
+        if len(b) + c[1] < 2:
             continue
 
-        print(len(b), c)
+        print(len(b) + c[1], c)
         print('-----')
         for build in b.values():
             print(round(build[2], 2), build[0], build[-1], build[3])
         print('\n')
-        total_builds += len(b.values())
+        total_builds += len(b) + c[1]
 
     print(len(stuff), '/', len(mu_builds), f'({round((len(stuff) / len(mu_builds)) * 100, 1)}%)')
     print('')
@@ -440,8 +459,8 @@ def manual_tokenize(
 # cProfile.run('''
 manual_tokenize(
     _test=False,
-    _write_builds=True,
-    _write_distributions=True,
+    _write_builds=False,
+    _write_distributions=False,
     _write_tokenized=False,
 )
 # ''', 'restats')
