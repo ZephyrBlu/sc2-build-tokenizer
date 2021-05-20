@@ -200,7 +200,6 @@ def manual_tokenize(
     #     print(c, o)
 
     mu_builds = []
-    stuff = set()
     for game in parsed_builds:
         races = []
         for build in game:
@@ -214,8 +213,7 @@ def manual_tokenize(
             if build.race == race:
                 mu_builds.append(build)
 
-    matched_builds = defaultdict(dict)
-    filtered_builds = defaultdict(int)
+    filtered_builds = {}
     seen_builds = set()
 
     for build_id, build in enumerate(mu_builds):
@@ -254,160 +252,148 @@ def manual_tokenize(
                 )
             )
 
+            if tuple(filtered_build) not in filtered_builds:
+                filtered_builds[(tuple(filtered_build))] = 0
+
             if filtered_build == filtered_other and other_id not in seen_builds:
                 filtered_builds[(tuple(filtered_build))] += 1
                 seen_builds.add(other_id)
 
         seen_builds.add(build_id)
 
+    def compare_builds(build, other):
+        s = SequenceMatcher(None, build, other)
+        b = s.get_matching_blocks()
+
+        build_matches = []
+        other_matches = []
+        compare_values = []
+        compare_diff = 0
+
+        for match in b:
+            for i in range(match.a, match.a + match.size):
+                build_matches.append(i)
+
+            for i in range(match.b, match.b + match.size):
+                other_matches.append(i)
+
+        comparison_builds = [
+            (build, build_matches),
+            (other, other_matches),
+        ]
+        comparison_weight = defaultdict(int)
+        for compare_build, compare_matches in comparison_builds:
+            compare_missing = {}
+            compare_buildings = []
+            for index, building in enumerate(compare_build):
+                # if non-matching building
+                if index not in compare_matches:
+                    compare_missing[building] = 0
+                    compare_buildings.append((building, index))
+
+            for building in compare_build:
+                if building in compare_missing:
+                    compare_missing[building] += 1
+
+            for building, index in compare_buildings:
+                probability = TOKEN_PROBABILITY[race1][race2][(building,)]
+                information = -math.log2(probability)
+                tf_idf = (1 / compare_missing[building]) * information
+                comparison_weight[building] += tf_idf  # (1 / (index if index != 0 else index + 1)) * 
+                compare_diff += tf_idf
+                compare_values.append((building, compare_missing[building], round(information, 1), round(tf_idf, 1)))
+
+        return compare_diff, comparison_weight, compare_values, s.ratio()
+
+    build_comparisons = {}
     for build_id, build in enumerate(filtered_builds.keys()):
         for other_id, other in enumerate(filtered_builds.keys()):
             # same build
             if build_id == other_id:
                 continue
 
-            s = SequenceMatcher(None, build, other)
-            b = s.get_matching_blocks()
+            compare_diff, comparison_weight, compare_values, ratio = compare_builds(build, other)
+            build_comparisons[tuple(sorted([build_id, other_id]))] = compare_diff
 
-            build_matches = []
-            other_matches = []
-            compare_values = []
-            compare_diff = 0
+    # print('Build Comparisons', len(build_comparisons))
+    # for c, b in build_comparisons:
+    #     print(c, b)
 
-            for match in b:
-                for i in range(match.a, match.a + match.size):
-                    build_matches.append(i)
+    build_list = list(filtered_builds.items())
+    build_clusters = {}
+    for build_id, build in enumerate(build_list):
+        build_clusters[build_id] = []
 
-                for i in range(match.b, match.b + match.size):
-                    other_matches.append(i)
+    while True:
+        cluster_comparisons = {}
+        for (build_id, other_id), diff in build_comparisons.items():
+            if build_id in build_clusters and other_id in build_clusters:
+                cluster_comparisons[(build_id, other_id)] = diff
 
-            comparison_builds = [
-                (build, build_matches),
-                (other, other_matches),
-            ]
-            comparison_weight = defaultdict(int)
-            for mod, (compare_build, compare_matches) in enumerate(comparison_builds):
-                compare_missing = {}
-                compare_buildings = []
-                for index, building in enumerate(compare_build):
-                    # if non-matching building
-                    if index not in compare_matches:
-                        compare_missing[building] = 0
-                        compare_buildings.append((building, index))
+        if not cluster_comparisons:
+            break
 
-                for building in compare_build:
-                    if building in compare_missing:
-                        compare_missing[building] += 1
+        sorted_comparisons = sorted(
+            cluster_comparisons.items(),
+            key=lambda build: build[1],
+        )
 
-                for building, index in compare_buildings:
-                    probability = TOKEN_PROBABILITY[race1][race2][(building,)]
-                    information = -math.log2(probability)
-                    tf_idf = (1 / compare_missing[building]) * information
-                    comparison_weight[building] += tf_idf  # (1 / (index if index != 0 else index + 1)) * 
-                    compare_diff += tf_idf
-                    compare_values.append((building, compare_missing[building], round(information, 1), round(tf_idf, 1)))
+        completed = False
+        for min_comparison_builds, min_comparison_diff in sorted_comparisons:
+            if min_comparison_diff > MAX_COMPARISON_DIFF:
+                break
 
-            # calculate tf-idf and add to total
-            # tf = building count in current build
-            # idf = fraction of builds containing building
-            # OR
-            # idf = building frequency over all builds
+            # check constituent builds
+            cluster_complete_linkage = True
+            for build_id in min_comparison_builds:
+                other_comparison_id = min_comparison_builds[0] if min_comparison_builds[1] == build_id else min_comparison_builds[1]
+                for other_id in build_clusters[build_id]:
+                    cross_cluster_diff = build_comparisons[tuple(sorted([other_comparison_id, other_id]))]
+                    if cross_cluster_diff > MAX_COMPARISON_DIFF:
+                        print(other_comparison_id, other_id, cross_cluster_diff)
+                        cluster_complete_linkage = False
+                        break
 
-            if compare_diff > MAX_COMPARISON_DIFF:
+                if not cluster_complete_linkage:
+                    break
+
+            if not cluster_complete_linkage:
                 continue
 
-            matched_builds[(build_id, filtered_builds[tuple(build)], tuple(build))][other_id] = (
-                other_id,
-                s.ratio(),
-                compare_diff,
-                comparison_weight,
-                compare_values,
-                build,
-                other,
-            )
-            # stuff.add(tuple(sorted([build_id, other_id])))
-            stuff.update([build_id, other_id])
+            max_build_count = -1
+            max_build_id = None
+            for build_id in min_comparison_builds:
+                if build_list[build_id][1] > max_build_count:
+                    max_build_count = build_list[build_id][1]
+                    max_build_id = build_id
 
-            # print(s.ratio())
-            # print(
-            #     build.player, '/', other.player,
-            #     '|', build.max_collection_rate, '/', other.max_collection_rate,
-            #     '|', round(build.game_length * 22.4), '/', round(other.game_length * 22.4),
-            # )
-            # print(compare_diff)  # , compare_values)
-            # print(build_matches)
-            # print(other_matches)
-            # print('Max Gameloops:', min_build_length)
-            # print(b)
-            # print(build.build)
-            # print(other.build)
-            # print('\n')
-            # print(filtered_build)
-            # print(filtered_other)
-            # print('')
+            other_build_id = min_comparison_builds[0] if min_comparison_builds[1] == max_build_id else min_comparison_builds[1]
+            build_clusters[max_build_id].extend(build_clusters[other_build_id])
+            build_clusters[max_build_id].append(other_build_id)
+            del build_clusters[other_build_id]
+            completed = True
+            break
 
-    build_clusters = list(matched_builds.items())
-    # sort based on size of build cluster
-    build_clusters.sort(key=lambda cluster: len(cluster[1]), reverse=True)
-
-    print('Identical Clusters', len(filtered_builds))
-    for b, c in sorted(list(filtered_builds.items()), key=lambda x: x[1], reverse=True):
-        print(c, b)
-
-    print('Original Clusters', len(build_clusters))
-    for c, b in build_clusters:
-        print(c[0], [build[0] for build in b.values()])
-
-    filtered_clusters = defaultdict(dict)
-    seen_builds = set()
-    for cluster, cluster_builds in build_clusters:
-        for build_id, build in cluster_builds.items():
-            if build_id in seen_builds:
-                continue
-
-            # min_cluster_diff = build[2]
-            # for other_cluster, other_cluster_builds in build_clusters:
-            #     if other_id in other_cluster_builds:
-            #         if other_cluster_builds[other_id][2] < min_cluster_diff:
-            #             min_cluster_diff = other_cluster_builds[other_id][2]
-            #             break
-
-            # if min_cluster_diff == build[2]:
-            filtered_clusters[cluster][build_id] = build
-            seen_builds.add(build_id)
-
-    # for cluster, cluster_builds in build_clusters:
-    #     for other_cluster, other_cluster_builds in build_clusters:
-    #         # if the other cl
-    #         if cluster[0] in other_cluster_builds:
+        if not completed:
+            break
 
     print('\n')
-    total_builds = 0
-    for c, b in filtered_clusters.items():
-        if len(b) + c[1] < 2:
-            continue
-
-        print(len(b) + c[1], c)
-        print('-----')
-        for build in b.values():
-            print(round(build[2], 2), build[0], build[-1], build[3])
-        print('\n')
-        total_builds += len(b) + c[1]
-
-    print(len(stuff), '/', len(mu_builds), f'({round((len(stuff) / len(mu_builds)) * 100, 1)}%)')
-    print('')
-    print(macro, '/', len(mu_builds), f'({round((macro / len(mu_builds)) * 100, 1)}%)')
-    print(total_builds, '/', macro, f'({round((total_builds / macro) * 100, 1)}%)')
-    print(total_builds, '/', len(mu_builds), f'({round((total_builds / len(mu_builds)) * 100, 1)}%)')
-
-    # matched_builds.sort(key=lambda build: build[1])
-    # for r, d, dv, v, b, o in matched_builds:
-    #     print(round(r, 1), round(d, 3))
-    #     print(dv)
-    #     print(v)
-    #     print(b)
-    #     print(o)
-    #     print('')
+    all_builds = 0
+    cluster_total = 0
+    unique_total = 0
+    for build_id, clustered in build_clusters.items():
+        total = build_list[build_id][1] + 1
+        for other_id in clustered:
+            total += build_list[other_id][1] + 1
+        all_builds += total
+        if total >= 3:
+            cluster_total += total
+        else:
+            unique_total += total
+        print(build_id, f'(Total: {total})', clustered)
+    print(unique_total, cluster_total)
+    print(unique_total + cluster_total, all_builds)
+    print(cluster_total / all_builds)
 
     # ----------------------
     # tokenized test replay
