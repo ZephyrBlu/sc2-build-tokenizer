@@ -156,10 +156,10 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    race2 = 'Zerg'
-    race1 = 'Terran'
-    MAX_COMPARISON_DIFF = 3
-    MIN_MINING_BASES = 3
+    race2 = 'Terran'
+    race1 = 'Zerg'
+    MAX_COMPARISON_DIFF = 10
+    MIN_MINING_BASES = 0
     matchup = sorted([race1, race2])
     race = race1
     opener = defaultdict(int)
@@ -232,6 +232,9 @@ def manual_tokenize(
             if other.max_collection_rate < (888 * MIN_MINING_BASES):
                 continue
 
+            if not build.build or not other.build:
+                continue
+
             min_build_length = max(build.build[-1][1], other.build[-1][1])
             filtered_build = list(
                 map(
@@ -253,7 +256,7 @@ def manual_tokenize(
             )
 
             if tuple(filtered_build) not in filtered_builds:
-                filtered_builds[(tuple(filtered_build))] = 0
+                filtered_builds[(tuple(filtered_build))] = 1
 
             if filtered_build == filtered_other and other_id not in seen_builds:
                 filtered_builds[(tuple(filtered_build))] += 1
@@ -298,7 +301,12 @@ def manual_tokenize(
             for building, index in compare_buildings:
                 probability = TOKEN_PROBABILITY[race1][race2][(building,)]
                 information = -math.log2(probability)
-                tf_idf = (1 / compare_missing[building]) * information
+                if index >= 10:
+                    tf_idf = 0
+                else:
+                    tf_idf = (1 / compare_missing[building]) * information
+                    if index > 5:
+                        tf_idf *= (1 - ((index - 5) / 5))
                 comparison_weight[building] += tf_idf  # (1 / (index if index != 0 else index + 1)) * 
                 compare_diff += tf_idf
                 compare_values.append((building, compare_missing[building], round(information, 1), round(tf_idf, 1)))
@@ -343,14 +351,14 @@ def manual_tokenize(
             if min_comparison_diff > MAX_COMPARISON_DIFF:
                 break
 
-            # check constituent builds
+            # cross check cluster builds
             cluster_complete_linkage = True
             for build_id in min_comparison_builds:
                 other_comparison_id = min_comparison_builds[0] if min_comparison_builds[1] == build_id else min_comparison_builds[1]
                 for other_id in build_clusters[build_id]:
                     cross_cluster_diff = build_comparisons[tuple(sorted([other_comparison_id, other_id]))]
                     if cross_cluster_diff > MAX_COMPARISON_DIFF:
-                        print(other_comparison_id, other_id, cross_cluster_diff)
+                        # print(other_comparison_id, other_id, cross_cluster_diff)
                         cluster_complete_linkage = False
                         break
 
@@ -381,16 +389,27 @@ def manual_tokenize(
     all_builds = 0
     cluster_total = 0
     unique_total = 0
+    sorted_clusters = []
     for build_id, clustered in build_clusters.items():
-        total = build_list[build_id][1] + 1
+        total = build_list[build_id][1]
         for other_id in clustered:
-            total += build_list[other_id][1] + 1
+            total += build_list[other_id][1]
         all_builds += total
-        if total >= 3:
+        if total >= 5:
             cluster_total += total
         else:
             unique_total += total
-        print(build_id, f'(Total: {total})', clustered)
+        sorted_clusters.append((build_id, clustered, total))
+
+    sorted_clusters.sort(key=lambda cluster: cluster[2], reverse=True)
+    for build_id, clustered, c_t in sorted_clusters:
+        print(build_id, f'(Total: {c_t})', clustered)
+        print('     ', build_list[build_id])
+        print('-----')
+        for other_id in clustered:
+            print(round(build_comparisons[tuple(sorted([build_id, other_id]))], 3), build_list[other_id])
+        print('\n')
+
     print(unique_total, cluster_total)
     print(unique_total + cluster_total, all_builds)
     print(cluster_total / all_builds)
