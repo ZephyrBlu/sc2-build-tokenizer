@@ -5,6 +5,7 @@ from dataclasses import dataclass
 class ParsedBuild:
     race: str
     player: str
+    game_map: str
     game_length: int
     max_collection_rate: int
     win: bool
@@ -14,6 +15,7 @@ class ParsedBuild:
         return {
             'race': self.race,
             'player': self.player,
+            'game_map': self.game_map,
             'game_length': self.game_length,
             'max_collection_rate': self.max_collection_rate,
             'win': self.win,

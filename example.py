@@ -14,7 +14,7 @@ from sc2_build_tokenizer.dataclasses import ParsedBuild, TokenizedBuild
 from sc2_build_tokenizer.data import PARSED_BUILDS, TOKENIZED_BUILDS
 
 TEST_REPLAY_PATH = Path('replays/IEM/1 - Playoffs/Finals/Reynor vs Zest/20210228 - GAME 1 - Reynor vs Zest - Z vs P - Oxide LE.SC2Replay')
-REPLAY_PATH = Path('replays')
+REPLAY_PATH = Path('replays/IEM/2 - Round of 24 - Group Stage/Group D')
 
 BUILD_TOKENS = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 TOKEN_PROBABILITY = defaultdict(lambda: defaultdict(dict))
@@ -52,6 +52,7 @@ def manual_tokenize(
                 ParsedBuild(
                     build['race'],
                     build['player'],
+                    build['game_map'],
                     build['game_length'],
                     build['max_collection_rate'],
                     build['win'],
@@ -156,8 +157,9 @@ def manual_tokenize(
                 TOKENIZED_BUILDS,
             ))
 
-    race2 = 'Terran'
-    race1 = 'Zerg'
+    race1 = 'Protoss'
+    race2 = 'Zerg'
+    player = 'PartinG'
     MAX_COMPARISON_DIFF = 10
     MIN_MINING_BASES = 0
     matchup = sorted([race1, race2])
@@ -177,7 +179,8 @@ def manual_tokenize(
         mu += 1
 
         for build in game:
-            if build.race == race:
+            if build.race == race and build.player == player:
+                print(build.player)
                 opening_build = []
                 mid_build = []
                 build_index = 0
@@ -194,23 +197,49 @@ def manual_tokenize(
                 # print(build.tokens, '\n')
                 opener[tuple(opening_build)] += 1
 
-    # print(f'{mu} games')
-    # top_openers = sorted(list(opener.items()), key=lambda o: o[1], reverse=True)
-    # for o, c in top_openers:
-    #     print(c, o)
+    print(f'{mu} games')
+    top_openers = sorted(list(opener.items()), key=lambda o: o[1], reverse=True)
+    for o, c in top_openers:
+        print(c, o)
 
     mu_builds = []
+    build_information = []
     for game in parsed_builds:
         races = []
         for build in game:
             races.append(build.race)
-        races.sort()
+
+        for build in game:
+            build_info = 0
+            filtered_build = list(
+                map(
+                    lambda x: x[0],
+                    filter(
+                        lambda x: 'Reactor' not in x[0] and 'TechLab' not in x[0],
+                        build.build,
+                    ),
+                )
+            )
+            other_race = races[0] if build.race == races[1] else races[1]
+            other_player = game[0].player if build.player == game[1].player else game[1].player
+            for building in filtered_build:
+                build_info += TOKEN_INFORMATION[build.race][other_race][(building,)]
+            build_information.append((
+                # round(build_info / len(build.build), 2),
+                build_info,
+                build.win,
+                build.player,
+                other_player,
+                build.game_map,
+                build.race,
+                filtered_build,
+            ))
 
         if races != matchup:
             continue
 
         for build in game:
-            if build.race == race:
+            if build.race == race and build.player == player:
                 mu_builds.append(build)
 
     filtered_builds = {}
@@ -413,6 +442,11 @@ def manual_tokenize(
     print(unique_total, cluster_total)
     print(unique_total + cluster_total, all_builds)
     print(cluster_total / all_builds)
+    print('\n')
+
+    build_information.sort(key=lambda build: (build[5], build[0]), reverse=True)
+    for b in build_information:
+        print(b)
 
     # ----------------------
     # tokenized test replay

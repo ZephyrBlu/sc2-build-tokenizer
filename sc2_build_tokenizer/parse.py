@@ -69,6 +69,7 @@ def extract_builds(replays, end=SEVEN_MINUTES, ignore=IGNORE_OBJECTS):
             player_build = ParsedBuild(
                 player.race,
                 player.name,
+                replay.metadata['map'],
                 replay.metadata['game_length'],
                 min(replay.summary['max_collection_rate'].values()),
                 replay.metadata['winner'] == p_id,
